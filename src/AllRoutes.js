@@ -37,17 +37,19 @@ export const AllRoutes = () => {
     const userRole =
       JSON.parse(localStorage.getItem("rememberMe")) ||
       JSON.parse(sessionStorage.getItem("userRecord"));
-    console.log("userRole", userRole);
+
     if (userRole) {
       setRole(userRole.role);
     } else {
-      // Redirect to login if no role is found
-      console.log("login page");
-      navigate("/login");
+      // Allow access to public routes (e.g., /register, /login)
+      const publicPaths = ["/register", "/login", "/forgot-password"];
+      const currentPath = window.location.pathname;
+
+      if (!publicPaths.includes(currentPath)) {
+        navigate("/login");
+      }
     }
   }, [navigate]);
-
-  console.log("role", role);
 
   return (
     <div>
@@ -150,7 +152,6 @@ export function ProtectedRoutes({ children }) {
 
 export function PublicRoutes({ children }) {
   const user = sessionStorage.getItem("user");
-  console.log("user", user);
   const remember = localStorage.getItem("rememberMe");
   if (remember || user) {
     return <Navigate to="/" />;
