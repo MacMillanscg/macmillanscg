@@ -42,6 +42,7 @@ export const AllRoutes = () => {
       setRole(userRole.role);
     } else {
       // Redirect to login if no role is found
+      console.log("login page");
       navigate("/login");
     }
   }, [navigate]);
