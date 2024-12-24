@@ -1,7 +1,7 @@
 {
   "files": {
     "main.css": "/macmillanscg/static/css/main.f175f62a.css",
-    "main.js": "/macmillanscg/static/js/main.75ce9721.js",
+    "main.js": "/macmillanscg/static/js/main.53d63f55.js",
     "static/media/fontawesome-webfont.svg?v=4.7.0": "/macmillanscg/static/media/fontawesome-webfont.c1e38fd9e0e74ba58f7a.svg",
     "static/media/logo.jpg": "/macmillanscg/static/media/logo.51231cc23dde328c1536.jpg",
     "static/media/fontawesome-webfont.eot": "/macmillanscg/static/media/fontawesome-webfont.8b43027f47b20503057d.eot",
@@ -16,10 +16,10 @@
     "static/media/xmlimg.PNG": "/macmillanscg/static/media/xmlimg.9cfee7a5c65c646940d4.PNG",
     "index.html": "/macmillanscg/index.html",
     "main.f175f62a.css.map": "/macmillanscg/static/css/main.f175f62a.css.map",
-    "main.75ce9721.js.map": "/macmillanscg/static/js/main.75ce9721.js.map"
+    "main.53d63f55.js.map": "/macmillanscg/static/js/main.53d63f55.js.map"
   },
   "entrypoints": [
     "static/css/main.f175f62a.css",
-    "static/js/main.75ce9721.js"
+    "static/js/main.53d63f55.js"
   ]
 }
