@@ -88,7 +88,7 @@ export const Summary = () => {
   console.log("eShipperPassword" , eShipperPassword)
 
   const { xmlData, formattedData, shipmentsId, setShipmentsId } =
-    useFetchXmlData();
+    useFetchXmlData(url);
 
   let userId = getUser();
   userId = userId?._id;

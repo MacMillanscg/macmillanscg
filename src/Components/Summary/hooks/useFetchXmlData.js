@@ -1,13 +1,15 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { url } from "../../../api";
+// import { url } from "../../../api";
 
-export const useFetchXmlData = () => {
+export const useFetchXmlData = (url) => {
   const [xmlData, setXmlData] = useState([]);
   const [formattedData, setFormattedData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [shipmentsId, setShipmentsId] = useState([]);
+
+  console.log("urls" , url)
 
   useEffect(() => {
     const fetchShipments = async () => {
@@ -124,7 +126,7 @@ export const useFetchXmlData = () => {
     };
 
     fetchXmlData();
-  }, []); // Run only on component mount
+  }, [url]); // Run only on component mount
 
   return {
     xmlData,
