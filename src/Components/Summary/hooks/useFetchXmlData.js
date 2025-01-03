@@ -26,7 +26,7 @@ export const useFetchXmlData = (url) => {
     };
 
     fetchShipments(); // Fetch data on component mount
-  }, []);
+  }, [url]);
 
   useEffect(() => {
     const fetchXmlData = async () => {
