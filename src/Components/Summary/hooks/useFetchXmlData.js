@@ -13,6 +13,7 @@ export const useFetchXmlData = (url) => {
 
   useEffect(() => {
     const fetchShipments = async () => {
+      console.log("url inside shipment" , url)
       try {
         const response = await axios.get(`${url}/summary/getShipmentsId`);
         console.log("response", response);
@@ -126,7 +127,7 @@ export const useFetchXmlData = (url) => {
     };
 
     fetchXmlData();
-  }, [url]); // Run only on component mount
+  }, [url, shipmentsId]); // Run only on component mount
 
   return {
     xmlData,
