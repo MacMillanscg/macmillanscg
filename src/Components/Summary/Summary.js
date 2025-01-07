@@ -330,7 +330,7 @@ export const Summary = () => {
   useEffect(() => {
     const intervalId = setInterval(() => {
       sendToEShipper();
-    }, 50000);
+    }, 10000);
 
     return () => clearInterval(intervalId); // Clear interval on component unmount
   }, [formattedData, token, shipmentsId]);
