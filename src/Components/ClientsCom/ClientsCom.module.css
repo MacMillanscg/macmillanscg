@@ -75,6 +75,7 @@
     /* justify-content: space-between; */
     padding-top: 16px;
     flex-wrap: wrap;
+    position: relative;
 }
 .cardWrap{
     /* width: 32%; */
@@ -149,8 +150,7 @@
     margin-bottom: 16px;
 }
 .cardLink{
-    max-width: 295px;
-    width: 100%;
+    width: 33%;
 }
 .cardLink:hover{
     text-decoration: none !important;

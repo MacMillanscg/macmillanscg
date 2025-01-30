@@ -1,19 +1,16 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-// import { url } from "../../../api";
+import { url } from "../../../api";
 
-export const useFetchXmlData = (url) => {
+export const useFetchXmlData = () => {
   const [xmlData, setXmlData] = useState([]);
   const [formattedData, setFormattedData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [shipmentsId, setShipmentsId] = useState([]);
 
-  console.log("urls" , url)
-
   useEffect(() => {
     const fetchShipments = async () => {
-      console.log("url inside shipment" , url)
       try {
         const response = await axios.get(`${url}/summary/getShipmentsId`);
         console.log("response", response);
@@ -27,7 +24,7 @@ export const useFetchXmlData = (url) => {
     };
 
     fetchShipments(); // Fetch data on component mount
-  }, [url]);
+  }, []);
 
   useEffect(() => {
     const fetchXmlData = async () => {
@@ -39,9 +36,23 @@ export const useFetchXmlData = (url) => {
 
         // Process and format data for each file dynamically
         const formattedFiles = files.map((file) => {
-          const data = file.data.ORDER; // Assuming ORDER is the relevant data in each file
+          const data = file?.data?.ORDER;
+          if (!data) {
+            console.warn("Missing ORDER data in file:", file);
+            return {}; // Return an empty object or handle the case when ORDER is missing
+          }
+    
+          // Ensure Header exists and has data
+          const header = data?.Header?.[0]; // safely access Header[0]
+          if (!header) {
+            console.warn("Missing or empty Header data in ORDER:", data);
+            return {}; // Return an empty object or handle the case when Header is missing
+          }
+    
           console.log("inside", data);
-          console.log("inside file", file.data.ORDER.Header[0]);
+          console.log("inside file", header);
+          console.log("inside", data);
+          console.log("inside file", file?.data?.ORDER?.Header[0]);
 
           // Format the data as required
           return {
@@ -127,7 +138,7 @@ export const useFetchXmlData = (url) => {
     };
 
     fetchXmlData();
-  }, [url, shipmentsId]); // Run only on component mount
+  }, []); // Run only on component mount
 
   return {
     xmlData,
@@ -138,3 +149,20 @@ export const useFetchXmlData = (url) => {
     setShipmentsId,
   };
 };
+
+
+// packagingUnit: data?.Header[0]?.static_packagingUnist?.[0] || "",
+// packages: {
+//   type: data?.Header[0]?.static_Type?.[0] || "",
+//   packages: (data?.Header || []).map((header) => ({
+//     height: header?.dimension_height?.[0] || "",
+//     length: header?.dimension_length?.[0] || "",
+//     width: header?.dimension_width?.[0] || "",
+//     dimensionUnit: header?.dimensionUnit?.[0] || "IN",
+//     weight: header?.dimension_weight?.[0] || "",
+//     weightUnit: header?.weightUnit?.[0] || "LB",
+//     insuranceAmount: header?.insuranceAmount?.[0] || 0,
+//     description: header?.description?.[0] || "No description provided",
+//   })),
+// },
+

@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { JSONTree } from "react-json-tree";
-import styles from "./OutputLogs.module.css";
-import toast from "react-hot-toast";
+import axios from "axios";
 import { js2xml } from "xml-js";
+import toast from "react-hot-toast";
+import styles from "./OutputLogs.module.css";
+import { url as apiURL } from "../../../../api";
 
 const theme = {
   base00: "#ffffff",
@@ -23,131 +25,134 @@ const theme = {
   base0F: "#d73a49",
 };
 
-const DataTreeView = ({ data }) => {
-  return (
-    <div style={{ margin: "20px" }}>
-      <JSONTree data={data} theme={theme} invertTheme={false} />
-    </div>
-  );
-};
+const DataTreeView = ({ data }) => (
+  <div style={{ margin: "20px" }}>
+    <JSONTree data={data} theme={theme} invertTheme={false} />
+  </div>
+);
 
-export const OutputLogs = ({ selectedIntegration, orders, shopifyDetails }) => {
+export const OutputLogs = ({ shopifyDetails, id }) => {
   const [activeTab, setActiveTab] = useState("output");
+  const [orders, setOrders] = useState([]);
   const [showExportOptions, setShowExportOptions] = useState(false);
   const [selectedFormat, setSelectedFormat] = useState("xml");
-  const previousOrdersRef = useRef([]);
-  const downloadTimerRef = useRef(null); // Timer reference
+  const [folderName, setFolderName] = useState("");
 
   const handleTabClick = (tab) => {
     setActiveTab(tab);
   };
 
-  const flattenObject = (obj, prefix = "") => {
-    return Object.keys(obj).reduce((acc, key) => {
-      const fullKey = prefix ? `${prefix}.${key}` : key;
-      if (typeof obj[key] === "object" && obj[key] !== null) {
-        Object.assign(acc, flattenObject(obj[key], fullKey));
-      } else {
-        if (
-          typeof obj[key] === "number" &&
-          obj[key] > Number.MAX_SAFE_INTEGER
-        ) {
-          acc[fullKey] = `"${String(obj[key])}"`;
-        } else {
-          acc[fullKey] = obj[key];
-        }
-      }
-      return acc;
-    }, {});
-  };
-
-  const handleExport = (newOrders) => {
-    if (!newOrders || newOrders.length === 0) {
-      toast.error("No new orders available for export.");
-      return;
-    }
-
-    // Get stored order IDs from localStorage
-    const storedOrderIds =
-      JSON.parse(localStorage.getItem("storedOrderIds")) || [];
-
-    const sortedOrders = [...newOrders].sort((a, b) => {
-      return String(a.id).localeCompare(String(b.id), undefined, {
-        numeric: true,
-      });
-    });
-
-    sortedOrders.forEach((order) => {
-      let content;
-      const flattenedOrder = flattenObject(order);
-
-      if (selectedFormat === "csv") {
-        const headers = Object.keys(flattenedOrder);
-        const rows = headers
-          .map((header) => {
-            const value =
-              flattenedOrder[header] !== undefined
-                ? `"${flattenedOrder[header]}"`
-                : "";
-            return value;
-          })
-          .join(",");
-
-        content = [headers.join(","), rows].join("\n");
-      } else if (selectedFormat === "xml") {
-        const wrappedOrder = { order };
-        content = js2xml(wrappedOrder, { compact: true, spaces: 4 });
-      }
-
-      if (content) {
-        const blob = new Blob([content], {
-          type: selectedFormat === "csv" ? "text/csv" : "application/xml",
-        });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${order.id}.${selectedFormat}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }
-    });
-
-    // Update stored order IDs
-    const updatedStoredOrderIds = [
-      ...new Set([...storedOrderIds, ...sortedOrders.map((order) => order.id)]),
-    ];
-    localStorage.setItem(
-      "storedOrderIds",
-      JSON.stringify(updatedStoredOrderIds)
-    );
-
-    toast.success(
-      `New files downloaded successfully as ${selectedFormat.toUpperCase()}!`
-    );
-  };
-
+  // Fetch the folder name by ID from localStorage
   useEffect(() => {
-    // Check if orders have changed and set timer to download new orders
-    if (previousOrdersRef.current !== orders && orders.length > 0) {
-      const storedOrderIds =
-        JSON.parse(localStorage.getItem("storedOrderIds")) || [];
-      const newOrders = orders.filter(
-        (order) => !storedOrderIds.includes(order.id)
+    const fetchFolderNameById = () => {
+      const savedDirectories = localStorage.getItem("savedDirectories");
+      if (savedDirectories) {
+        try {
+          const directories = JSON.parse(savedDirectories);
+          const directoryForId = directories.find((dir) => dir.id === id);
+          if (directoryForId && directoryForId.name) {
+            setFolderName(directoryForId.name);
+          } else {
+            setFolderName(""); // Clear folder name
+            toast.error("No folder found for this connection. Please set it first.");
+          }
+        } catch (error) {
+          console.error("Error parsing saved directories:", error);
+          toast.error("Failed to load folder from localStorage.");
+        }
+      } else {
+        setFolderName(""); // Reset folder name
+        toast.error("No saved folder found to export orders.");
+      }
+    };
+  
+    fetchFolderNameById();
+  }, [id]);
+  
+
+  // Fetch Shopify Orders
+  const fetchShopifyOrders = async () => {
+    try {
+      const response = await axios.get(`${apiURL}/connections/${id}/api/orders`);
+      const orders = response.data.orders;
+
+      const unfulfilledOrders = orders.filter(
+        (order) => order.fulfillment_status !== "fulfilled"
       );
 
-      if (newOrders.length > 0) {
-        // Set a timer to download new orders after 10 seconds
-        downloadTimerRef.current = setTimeout(() => {
-          handleExport(newOrders);
-        }, 500000); // 10000 milliseconds = 10 seconds
-      }
-    }
+      const ordersWithPhone = unfulfilledOrders.map((order) => {
+        const phoneNumber = order.customer?.phone || "No phone provided";
+        return { ...order, customerPhone: phoneNumber };
+      });
 
-    // Cleanup function to clear the timer if component unmounts
-    return () => clearTimeout(downloadTimerRef.current);
-  }, [orders]);
+      setOrders(ordersWithPhone);
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+      toast.error("Failed to fetch orders.");
+    }
+  };
+
+  // Export Orders
+  const exportOrders = async () => {
+    const today = new Date();
+    const lastWeekDate = new Date();
+    lastWeekDate.setDate(today.getDate() - 7);
+  
+    const todaysOrders = orders.filter((order) => {
+      const orderDate = new Date(order.created_at);
+      return orderDate >= lastWeekDate && orderDate <= today;
+    });
+    
+    console.log("todayss" , todaysOrders)
+    try {
+      if (selectedFormat === "xml") {
+        const xmlOrders = todaysOrders.map((order) => {
+          const xmlContent = js2xml({ order }, { compact: true, spaces: 4 });
+          return {
+            fileName: `order_${order.id || Date.now()}.xml`,
+            content: xmlContent,
+          };
+        });
+  
+        const response = await axios.post(`${apiURL}/connections/api/export-orders`, {
+          folderName,
+          xmlOrders,
+        });
+  
+        toast.success(response.data.message || "Orders exported successfully to backend!");
+      } else if (selectedFormat === "csv") {
+        const csvContent =
+          "id,created_at,customerPhone\n" +
+          todaysOrders
+            .map((order) => `${order.id},${order.created_at},${order.customerPhone}`)
+            .join("\n");
+  
+        const response = await axios.post(`${apiURL}/api/export-orders`, {
+          folderName,
+          csvContent,
+        });
+  
+        toast.success(response.data.message || "Orders exported successfully to backend!");
+      }
+    } catch (error) {
+      console.error("Error exporting orders:", error);
+      // toast.error("Failed to export orders to backend.");
+    }
+  };
+  
+
+  useEffect(() => {
+    // Function to run exportOrders every 10 seconds
+    const interval = setInterval(() => {
+      exportOrders();
+    }, 10000); 
+    return () => clearInterval(interval);
+  }, [orders, folderName, selectedFormat]); 
+  
+
+  useEffect(() => {
+    fetchShopifyOrders();
+  }, []);
 
   return (
     <div className={styles.tabsContainer}>
@@ -172,7 +177,7 @@ export const OutputLogs = ({ selectedIntegration, orders, shopifyDetails }) => {
         </div>
         <div className={styles.exportButtonContainer}>
           <button
-            className={styles.exportButton}
+            className="btn btn-primary"
             onClick={() => setShowExportOptions(!showExportOptions)}
           >
             Export
@@ -204,17 +209,13 @@ export const OutputLogs = ({ selectedIntegration, orders, shopifyDetails }) => {
                   XML
                 </label>
               </div>
-
               <div className={styles.btns}>
                 <button
                   onClick={() => {
-                    if (selectedFormat) {
-                      handleExport(orders); // Export current orders when clicked
-                    } else {
-                      toast.error("Please select a format.");
-                    }
+                    exportOrders();
+                    setShowExportOptions(false);
                   }}
-                  className={`btn btn-primary mt-2 ${styles.export}`}
+                  className="btn btn-primary mt-2"
                 >
                   Export
                 </button>
@@ -240,7 +241,6 @@ export const OutputLogs = ({ selectedIntegration, orders, shopifyDetails }) => {
             )}
           </div>
         )}
-
         {activeTab === "logs" && (
           <div className={styles.logs}>
             <h4 className="fs-6 m-0 mb-3">Logs</h4>

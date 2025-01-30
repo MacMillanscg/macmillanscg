@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from "react";
 import styles from "./Summary.module.css";
-import { useAppContext } from "../Context/AppContext";
-import { useDispatch, useSelector } from "react-redux";
-import { verifyEShipperCredentials } from "../../Redux/Actions/SummaryActions";
 import axios from "axios";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import toast from "react-hot-toast";
+import "react-datepicker/dist/react-datepicker.css";
 import {
   faEllipsisV,
   faChevronDown,
@@ -12,31 +11,35 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { DotsModal } from "./DotsModal";
 import { PrintModal } from "./PrintModal";
-import { MockData } from "./MockData";
 import { ColumnManagementModal } from "./ColumnManagementModal";
 import { StatusPopup } from "./StatusPopup/StatusPopup";
 import { TimeRangeFilter } from "./AllTimePopup/TimeRangeFilter ";
 import { CustomPagination } from "./CustomPagination/CustomPagination";
-import "react-datepicker/dist/react-datepicker.css";
-import { getUser } from "../../storageUtils/storageUtils";
 import { url } from "../../api";
-import { PDFDocument, rgb } from "pdf-lib";
+import { PDFDocument } from "pdf-lib";
 import { ExportModal } from "./ExportModal/ExportModal";
 import { ConfirmCancelPopUp } from "../Common/ConfirmCancelPopUp/ConfirmCancelPopUp";
-import { useFetchXmlData } from "./hooks/useFetchXmlData";
 import { Spinner } from "../Spinner/Spinner";
-import { fetchConnections } from "../../Redux/Actions/ConnectionsActions";
-// import { eShipperUsername } from "../../api";
-// import { eShipperPassword } from "../../api";
+import { verifyEShipperCredentials } from "../../Redux/Actions/SummaryActions";
+import { initialColumns } from "./ColumnsFields";
+import { getUser } from "../../storageUtils/storageUtils";
+import { useAppContext } from "../Context/AppContext";
+import { useDispatch, useSelector } from "react-redux";
+import { useFetchXmlData } from "./hooks/useFetchXmlData";
+import { useShopifyOrderIds } from "./hooks/useShopifyOrderIds";
+import { useFetchShopifyOrders } from "./hooks/useFetchShopifyOrders";
+import { useFetchShipmentDetails } from "./hooks/useFetchShipmentDetails";
+import { useFetchUnFulfillmentOrders } from "./hooks/useFetchUnFulfillmentOrders";
+import { useFetchAllShipments } from "./hooks/useFetchAllShipments";
+import { useMatchedFulfillments } from "./hooks/useMatchedFulfillments";
+import { useTimeRangeFilter } from "./hooks/useTimeRangeFilter";
+import { useResetFilters } from "./hooks/useResetFilters";
 
 export const Summary = () => {
   const { dashboardWidth } = useAppContext();
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [customStartDate, setCustomStartDate] = useState(null);
-  const [customEndDate, setCustomEndDate] = useState(null);
   const [data, setData] = useState([]);
-  const [filteredClients, setFilteredClients] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [selectedRows, setSelectedRows] = useState([]);
   const token = useSelector((state) => state.eshipper.token);
@@ -46,96 +49,44 @@ export const Summary = () => {
   const [showExportModal, setShowExportModal] = useState(false);
   const [isColumnManagerVisible, setIsColumnManagerVisible] = useState(false);
   const [selectedStatuses, setSelectedStatuses] = useState([]);
-  const [timeRange, setTimeRange] = useState("allTime");
   const [showDialog, setShowDialog] = useState(false);
-  const [orders, setOrders] = useState([]);
-  const [shipmentData, setShipmentData] = useState([]);
   const [currentPage, setCurrentPage] = useState(1); // Track the current page
   const [itemsPerPage, setItemsPerPage] = useState(20);
-  const [loading, setLoading] = useState(true);
   const [allShipmentData, setAllShipmentData] = useState([]);
-  const [connectionId, setConnectionId] = useState("23523452523452");
-  const initialColumns = [
-    { name: "", key: "select", visible: true },
-    { name: "Order Number", key: "orderNumber", visible: true },
-    { name: "Platform", key: "platform", visible: true },
-    { name: "Shipment Status", key: "shipmentStatus", visible: true },
-    { name: "Carrier", key: "carrier", visible: true },
-    { name: "Client", key: "client", visible: true },
-    { name: "Customer", key: "customer", visible: true },
-    { name: "Address", key: "address", visible: true },
-    { name: "Tracking Number", key: "trackingNumber", visible: true },
-    { name: "Tracking URL", key: "trackingUrl", visible: true },
-    { name: "Created Date", key: "createdDate", visible: true },
-    { name: "Shipped Date", key: "shippedDate", visible: true },
-    { name: "Reference", key: "reference", visible: true },
-    { name: "Reference2", key: "reference2", visible: true },
-    { name: "Reference3", key: "reference3", visible: true },
-    { name: "Dimentions", key: "dimentions", visible: true },
-    { name: "Weight", key: "weight", visible: true },
-    { name: "Labels", key: "labels", visible: true },
-    { name: "Downloaded", key: "downloaded", visible: true },
-  ];
+  const [connectionsData , setConnectionsData ] = useState([])
+
   const [columns, setColumns] = useState(initialColumns);
-  const { connections, error } = useSelector((state) => state.connections);
+  const [loadingConnections, setLoadingConnections] = useState(true);
+  const [isDownloading, setIsDownloading] = useState(false);
   const dispatch = useDispatch();
-  console.log("connectinos", connections);
-  const abc = "asdfkjasdkj";
 
   const eShipperUsername = process.env.REACT_APP_ESHIPPER_USERNAME;
   const eShipperPassword = process.env.REACT_APP_ESHIPPER_PASSWORD;
-  console.log("eShipperUsername" , eShipperUsername)
-  console.log("eShipperPassword" , eShipperPassword)
 
-  const { xmlData, formattedData, shipmentsId, setShipmentsId } =
-    useFetchXmlData(url);
+  // customs hooks
+  const {allOrders, orders, loadingOrders, filteredClients, orderClientsId } = useFetchShopifyOrders(connectionsData, url);
+  const { fulfillmentOrders, loading, error } = useFetchUnFulfillmentOrders(url, orders);
+  const { xmlData, formattedData, shipmentsId, setShipmentsId } = useFetchXmlData();
+  const shopifyOrderIds = useShopifyOrderIds(fulfillmentOrders, url);
+  const { shipmentData, loadingShipments } = useFetchShipmentDetails(url);
+  const { shipmentsResponse } = useFetchAllShipments(url);
+  const {matchedFulfillments} = useMatchedFulfillments(fulfillmentOrders, allShipmentData)
+  const { timeRange,customStartDate,customEndDate,setTimeRange,setCustomStartDate, setCustomEndDate,} = useTimeRangeFilter()
+ 
 
+  console.log("shopifyOrderId" , shopifyOrderIds)
+  console.log("shipmentData" , shipmentData)
+  console.log("orders" , orders)
   let userId = getUser();
   userId = userId?._id;
-
-  useEffect(() => {
-    const fetchAllConncections = async () => {
-      try {
-        const response = await axios.get(`${url}/summary`);
-        if (response.data) {
-          // setConnectionId(response?.data[0]?._id);
-          // console.log("response", response?.data[0]?._id);
-          console.log("testing")
-        }
-      } catch (error) {
-        console.log(error);
-      }
-    };
-    fetchAllConncections();
-  }, [connectionId]);
-
-  useEffect(() => {
-    const fetchAllClients = async () => {
-      try {
-        const response = await axios.get(`${url}/clients`);
-        const updatedData = response.data;
-        const userClients = updatedData.filter(
-          (user) => user.userId === userId
-        );
-
-        setClients(userClients);
-      } catch (error) {
-        console.log(error);
-      }
-    };
-    fetchAllClients();
-    fetchConnections();
-  }, [userId]);
-  // console.log("clients", clients);
 
   const filterDataByTimeRange = (data) => {
     const today = new Date();
 
-    // Helper function to normalize dates to remove time components
     const normalizeDate = (date) =>
       new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
-    console.log("Original data:", data); // Log the input data
+    console.log("Original data:", data);
 
     if (timeRange === "allTime") {
       return data;
@@ -147,16 +98,7 @@ export const Summary = () => {
         const isToday =
           normalizeDate(createdDate).getTime() ===
           normalizeDate(today).getTime();
-        console.log(
-          "Today Filter - Created Date:",
-          createdDate,
-          "Normalized Created Date:",
-          normalizeDate(createdDate),
-          "Normalized Today:",
-          normalizeDate(today),
-          "Match:",
-          isToday
-        );
+   
         return isToday;
       });
     } else if (timeRange === "thisWeek") {
@@ -184,23 +126,10 @@ export const Summary = () => {
         const isInCustomRange =
           normalizeDate(createdDate) >= normalizeDate(customStartDate) &&
           normalizeDate(createdDate) <= normalizeDate(customEndDate);
-        console.log(
-          "Custom Range Filter - Created Date:",
-          createdDate,
-          "Normalized Created Date:",
-          normalizeDate(createdDate),
-          "Custom Start Date:",
-          normalizeDate(customStartDate),
-          "Custom End Date:",
-          normalizeDate(customEndDate),
-          "Match:",
-          isInCustomRange
-        );
+     
         return isInCustomRange;
       });
     }
-
-    console.log("No filtering applied, returning all data:", data);
     return data;
   };
 
@@ -238,7 +167,7 @@ export const Summary = () => {
   };
 
   const handleCloseExportModal = () => {
-    setShowExportModal(false); // Close the export modal
+    setShowExportModal(false); 
   };
 
   const handleSearchChange = (e) => {
@@ -247,7 +176,7 @@ export const Summary = () => {
     let newItem = [];
     if (value.length > 3) {
       newItem = orders.filter((val, i) => {
-        return val.customer.toLowerCase().startsWith(value.toLowerCase());
+        return val.customer?.first_name.toLowerCase().startsWith(value.toLowerCase());
       });
       setFilteredData(newItem);
     } else {
@@ -255,41 +184,25 @@ export const Summary = () => {
     }
   };
 
-
-  console.log("connecitonid", connectionId);
-
-  const fetchShopifyOrders = async () => {
-    if (!connectionId) return;
-    try {
-      const response = await axios.get(
-        `${url}/connections/${connectionId}/api/orders`
-      );
-      console.log("testing");
-      const orders = response.data.orders;
-
-      const ordersWithPhone = orders.map((order) => {
-        const phoneNumber = order.customer?.phone || "No phone provided";
-        // console.log("phonenumber", phoneNumber);
-        return { ...order, customerPhone: phoneNumber };
-      });
-
-      // console.log("orderwith", ordersWithPhone);
-      setOrders(ordersWithPhone);
-      setFilteredClients(ordersWithPhone);
-    } catch (error) {
-      console.error("Error fetching orders:", error);
-    } finally {
-      setLoading(false); // Set loading to false after fetching data
-    }
-  };
-
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchShopifyOrders();
-    }, 4000);
-
-    return () => clearTimeout(timer);
+    const fetchConnections = async () => {
+      setLoadingConnections(true); // Start loading
+      try {
+        const response = await axios.get(`${url}/summary`);
+        setConnectionsData(response.data);
+        setClients(response.data);
+      } catch (err) {
+        toast.error("Failed to fetch connections");
+      } finally {
+        setLoadingConnections(false); // Stop loading
+      }
+    };
+    
+    fetchConnections();
   }, []);
+  console.log("connectionsData" , connectionsData)
+
+  console.log("formatedData" , formattedData)
 
   const sendToEShipper = async () => {
     if (formattedData.length === 0) return;
@@ -316,40 +229,34 @@ export const Summary = () => {
 
       // Send request to backend
       const response = await axios.put(`${url}/summary/create-shipment`, data);
+      console.log("response shipment........" , response.data)
+      const successResponse = response.data?.successResponses;
+      // if(response){
+      //   toast.success(response.data.message)
+      // }
 
+      setShipmentsId((prev) => [
+        ...prev,
+        {
+          shipmentId: successResponse.shipmentId,
+          shopifyOrderId: successResponse.shopifyOrderId,
+        },
+      ]);
+      
       // Handle success and failed responses from backend
-      console.log("eShipper Response:", response.data?.successResponses[0]);
-      const newShipmentIds = response.data.successResponses.map((res) => res);
-      console.log("newshipmentIds", newShipmentIds);
-      setShipmentsId((prev) => [...prev, ...newShipmentIds]);
     } catch (error) {
       console.error("Error sending data to eShipper:", error);
     }
   };
+  console.log("shipmentsId" , shipmentsId)
 
   useEffect(() => {
     const intervalId = setInterval(() => {
       sendToEShipper();
-    }, 10000);
+    }, 50000);
 
     return () => clearInterval(intervalId); // Clear interval on component unmount
   }, [formattedData, token, shipmentsId]);
-
-  const fetchShipmentDetails = async () => {
-    try {
-      const response = await axios.get(`${url}/summary/getShipments`);
-
-      console.log("Shipment Details:", response.data.shipments);
-      setShipmentData(response.data.shipments);
-    } catch (error) {
-      console.error("Error fetching shipment details:", error);
-    }
-  };
-  console.log("shipmentData", shipmentData);
-
-  useEffect(() => {
-    fetchShipmentDetails();
-  }, []);
 
   const cleanShipmentData = (data) => {
     return data.map((item) => {
@@ -383,19 +290,20 @@ export const Summary = () => {
     setAllShipmentData(cleanData);
   }, [shipmentData]);
 
-  // Example usage with shipmentData
   console.log("allShipmentData", allShipmentData);
-
-  console.log("ordrs", orders);
-  // console.log("filterclients", filteredClients);
 
   const handleEShipperClick = () => {
     dispatch(verifyEShipperCredentials(eShipperUsername, eShipperPassword));
   };
 
   useEffect(() => {
-    handleEShipperClick();
-  }, []);
+    // Check if there is connection data available
+    if (connectionsData && connectionsData.length > 0) {
+      handleEShipperClick(); // Only proceed if there is connection data
+    } else {
+      console.log("No connection data available, skipping eShipper verification.");
+    }
+  }, [connectionsData]); // Run whenever the connection data changes
 
   const decodeBase64 = (base64String, fileType = "application/octet-stream") => {
     try {
@@ -413,6 +321,7 @@ export const Summary = () => {
   };
   
   const handleDownloadClick = async (rowIndex, base64Data, trackingNumber) => {
+    setIsDownloading(true); // Start loading
     try {
       // Validate base64 data
       if (!base64Data || typeof base64Data !== "string") {
@@ -420,8 +329,7 @@ export const Summary = () => {
       }
   
       let pdfBytes;
-    // Use trackingNumber or a fallback name
-  
+      // Use trackingNumber or a fallback name
       if (base64Data.startsWith("JVBERi0")) {
         // Handle PDF data
         const blob = decodeBase64(base64Data, "application/pdf");
@@ -483,6 +391,8 @@ export const Summary = () => {
     } catch (error) {
       console.error("Error processing file:", error);
       alert("Failed to process the file. Please try again.");
+    } finally {
+      setIsDownloading(false); // Stop loading after the operation completes
     }
   };
   
@@ -497,9 +407,9 @@ export const Summary = () => {
             !currentOrders?.some((order) => order.id.toString() === shipment.shopifyOrderId)
         ),
       ];
-      setSelectedRows(allRows); // Store all rows when "select all" is checked
+      setSelectedRows(allRows); 
     } else {
-      setSelectedRows([]); // Clear selection when "select all" is unchecked
+      setSelectedRows([]); 
     }
   };
   
@@ -508,7 +418,6 @@ export const Summary = () => {
     const updatedSelection = [...selectedRows];
   
     if (checked) {
-      // Add the row data and scheduledDate to the selected rows
       updatedSelection.push({
         rowData,
         scheduledDate,
@@ -525,28 +434,27 @@ export const Summary = () => {
     setSelectedRows(updatedSelection);
   };
   
-
-  console.log("slectedRow" , selectedRows)
+  // console.log("slectedRow" , selectedRows)
 
   const extractFields = (data) => {
     return data.map(item => ({
-        carrier: item.rowData.carrier,
-        shipmentId: item.rowData.shipmentId,
-        trackingNumber: item.rowData.trackingNumber,
-        trackingUrl: item.rowData.trackingUrl,
-        reference: item.rowData.reference,
-        reference2: item.rowData.reference2,
-        reference3: item.rowData.reference3,
-        shopifyOrderId: item.rowData.shopifyOrderId,
-        dimensions: item.rowData.dimentions, // Correct spelling as "dimensions"
-        weight: item.rowData.weight,
-        attention: item.scheduledDate.from.attention,
-        address1: item.scheduledDate.from.address1,
+        carrier: item?.rowData?.carrier,
+        shipmentId: item?.rowData?.shipmentId,
+        trackingNumber: item?.rowData?.trackingNumber,
+        trackingUrl: item?.rowData?.trackingUrl,
+        reference: item?.rowData?.reference,
+        reference2: item?.rowData?.reference2,
+        reference3: item?.rowData?.reference3,
+        shopifyOrderId: item?.rowData?.shopifyOrderId,
+        dimensions: item?.rowData?.dimentions, // Correct spelling as "dimensions"
+        weight: item?.rowData?.weight,
+        attention: item?.scheduledDate?.from?.attention,
+        address1: item?.scheduledDate?.from?.address1,
     }));
 };
 
 const result = extractFields(selectedRows);
-console.log("resutl" ,result);
+// console.log("resutl" ,result);
   
 
   const handleReset = () => {
@@ -573,6 +481,7 @@ console.log("resutl" ,result);
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentOrders = filteredData.slice(indexOfFirstItem, indexOfLastItem);
+  console.log("current orders" , currentOrders)
 
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
 
@@ -588,6 +497,55 @@ console.log("resutl" ,result);
     setItemsPerPage(Number(e.target.value));
     setCurrentPage(1); // Reset to first page when items per page is changed
   };
+
+  console.log("allOrders" , allOrders)
+  // console.log("orderClientsId" , orderClientsId)
+  console.log("shipmentsResponse" , shipmentsResponse)
+  // console.log("Fulfillment Orders:" , fulfillmentOrders)
+  // console.log("Matched Fulfillment:" , matchedFulfillments)
+  
+  // Match Fulfillment Orders with Shipment Data
+
+// create fulfillment /
+const sendFulfillmentsWithDelay = async (fulfillments, delay = 2000) => {
+  for (let i = 0; i < fulfillments.length; i++) {
+    const { fulfillment_order_id, tracking_info } = fulfillments[i];
+    console.log(`Sending fulfillment for ID: ${fulfillment_order_id}`);
+
+    try {
+      const response = await axios.post(
+        `${url}/summary/create-fulfillment`,
+        {
+          fulfillment_order_id,
+          message: "The package was shipped this morning.",
+          tracking_info,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      console.log("Fulfillment created for ID:", fulfillment_order_id, response.data);
+    } catch (error) {
+      console.error(
+        `Error creating fulfillment for ID ${fulfillment_order_id}:`,
+        error.response ? error.response.data : error.message
+      );
+    }
+
+    // Wait for the specified delay before sending the next request
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+};
+
+ // useEffect to trigger sending fulfillments
+//  useEffect(() => {
+//   if (matchedFulfillments.length > 0) {
+//     sendFulfillmentsWithDelay(matchedFulfillments, 2000); // Delay of 2000ms
+//   }
+// }, [matchedFulfillments]);
+
 
   return (
     <div
@@ -699,8 +657,12 @@ console.log("resutl" ,result);
       </div>
 
       <div className={styles.tableContainer}>
-        <Spinner isLoading={loading} message="Loading data, please wait..." />
-        <table className={`${styles.table} mt-4`}>
+            {(loadingOrders || loadingShipments || loadingConnections) && (
+        <Spinner isLoading={true} message="Loading data, please wait..." />
+      )}
+
+ 
+<table className={`${styles.table} mt-4`}>
   <thead>
     <tr>
       <th>
@@ -716,139 +678,158 @@ console.log("resutl" ,result);
     </tr>
   </thead>
   <tbody>
-    {[
-      ...(currentOrders || []),
-      ...allShipmentData.filter(
-        (shipment) =>
-          !currentOrders?.some((order) => order.id.toString() === shipment.shopifyOrderId)
-      ),
-    ].map((item, index) => {
-      const isOrder = currentOrders?.some((order) => order.id === item.id);
-      const order = isOrder ? item : null;
+    {[...(currentOrders || []),
+    ...allShipmentData.filter(
+      (shipment) =>
+        !currentOrders?.some((order) => order.id.toString() === shipment.shopifyOrderId)
+    )]
+      // Sort by creation date: most recent first
+      .sort((a, b) => {
+        const aOrderDate = new Date(a.created_at || a.scheduledShipDate);
+        const bOrderDate = new Date(b.created_at || b.scheduledShipDate);
+        return bOrderDate - aOrderDate; // Sort in descending order
+      })
+      .map((item, index) => {
+        // console.log("orders inside map", currentOrders);
+        console.log("item inside map", item);
 
-      const shipment = allShipmentData?.find(
-        (shipment) =>
-          shipment.shopifyOrderId === (order ? order.id.toString() : item.shopifyOrderId)
-      );
-      console.log("shipent" , shipment)
+        const isOrder = currentOrders?.some((order) => order.id === item.id);
+        const order = isOrder ? item : null;
 
-      const scheduledShipDated = formattedData?.find(
-        (data) =>
-          data.reference1 === (order ? order.id.toString() : shipment?.shopifyOrderId)
-      );
-      console.log("scheduledShipment" , scheduledShipDated)
+        const shipment = allShipmentData?.find(
+          (shipment) =>
+            shipment.shopifyOrderId === (order ? order.id.toString() : item.shopifyOrderId)
+        );
+        // console.log("shipment", shipment);
 
-      return (
-        <tr key={index}>
-          {columns.map((col, colIndex) => {
-            if (!col.visible) return null;
+        const newData = shipmentsResponse.find(
+          (data) => data.shopifyOrderId === (order ? order.id.toString() : shipment?.shopifyOrderId)
+        );
+        console.log("NewData", newData);
+        const filterData = allOrders.find((order) => order.id.toString() == shipment?.shopifyOrderId);
+        // console.log("filterData", filterData);
 
-            let value = "";
-            switch (col.key) {
-              case "select":
-                value = (
-                  <input
-                    type="checkbox"
-                    checked={selectedRows.some((selected) => selected.rowData === item)}
-                    onChange={(e) =>
-                      handleRowSelect(e, index, item, scheduledShipDated)
-                    }
-                  />
-                );
-                break;
-              case "orderNumber":
-                value = order ? order.id : shipment?.shopifyOrderId;
-                break;
-              case "platform":
-                value = order ? "Shopify" : "Shipment";
-                break;
-              case "shipmentStatus":
-                value = shipment ? "Ready for shipping" : "";
-                break;
-              case "carrier":
-                value = shipment?.carrier || "";
-                break;
-              case "client":
-                value = clients[0]?.clientName;
-                break;
-              case "customer":
-                value = scheduledShipDated?.from?.attention || "-";
-                break;
-              case "address":
-                value = scheduledShipDated?.from?.address1 || "-";
-                break;
-              case "trackingNumber":
-                value = shipment?.trackingNumber || "";
-                break;
-              case "trackingUrl":
-                value = shipment?.trackingUrl ? (
-                  <a
-                    href={shipment.trackingUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Url
-                  </a>
-                ) : (
-                  ""
-                );
-                break;
-              case "createdDate":
-                value = order
-                  ? new Date(order.created_at).toISOString().split("T")[0]
-                  : "-";
-                break;
-              case "shippedDate":
-                value =
-                  scheduledShipDated?.scheduledShipDate?.split(" ")[0] || "-";
-                break;
-              case "reference":
-                value = shipment?.reference || "-";
-                break;
-              case "reference2":
-                value = shipment?.reference2 || "-";
-                break;
-              case "reference3":
-                value = shipment?.reference3 || "-";
-                break;
-              case "dimentions":
-                value = shipment?.dimentions || "-";
-                break;
-              case "weight":
-                value = shipment?.weight || "-";
-                break;
-              case "labels":
-                value = shipment ? "Label" : ""; // Placeholder
-                break;
-              case "downloaded":
-                value = shipment?.labels ? (
-                  <button
-                    onClick={() =>
-                      handleDownloadClick(index, shipment.labels, shipment.trackingNumber)
-                    }
-                  >
-                    Download
-                  </button>
-                ) : (
-                  ""
-                );
-                break;
-              default:
-                value = "-";
-                break;
-            }
+        return (
+          <tr key={index}>
+            {columns.map((col, colIndex) => {
+              if (!col.visible) return null;
 
-            return <td key={colIndex}>{value}</td>;
-          })}
-        </tr>
-      );
-    })}
+              let value = "";
+              switch (col.key) {
+                case "select":
+                  value = (
+                    <input
+                      type="checkbox"
+                      checked={selectedRows.some((selected) => selected.rowData === item)}
+                      onChange={(e) =>
+                        handleRowSelect(e, index, item, newData)
+                      }
+                    />
+                  );
+                  break;
+                case "orderNumber":
+                  value = order ? order.id : shipment?.shopifyOrderId;
+                  break;
+                case "platform":
+                  value = order ? "Shopify" : "Shopify";
+                  break;
+                case "shipmentStatus":
+                  value = shipment ? "Ready for shipping" : "";
+                  break;
+                case "carrier":
+                  value = shipment?.carrier || "";
+                  break;
+                case "client":
+                  value = order
+                    ? orderClientsId.find((client) => client.orderId === order.id)?.clientName || ""
+                    : filterData?.clientName || "";
+                  break;
+
+                case "customer":
+                  value = order
+                    ? `${order?.customer?.first_name || ''} ${order?.customer?.last_name || ''}`
+                    : `${filterData?.customer?.first_name || " " }  ${filterData?.customer?.last_name || " " }`; // Only show the order data in customer
+                  break;
+
+                case "address":
+                  value = order?.customer?.default_address?.address1
+                    || filterData?.customer?.default_address?.address1
+                    || order?.shipping_address?.address1
+                    || ""; // Leave it empty if no address exists
+                  break;
+
+                case "trackingNumber":
+                  value = shipment?.trackingNumber || "";
+                  break;
+                case "trackingUrl":
+                  value = shipment?.trackingUrl ? (
+                    <a
+                      href={shipment.trackingUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Url
+                    </a>
+                  ) : (
+                    ""
+                  );
+                  break;
+                case "createdDate":
+                  value = order
+                    ? new Date(order.created_at).toISOString().split("T")[0]
+                    : "";
+                  break;
+                case "shippedDate":
+                  value =
+                    newData?.scheduledShipDate?.split(" ")[0] || "";
+                  break;
+                case "reference":
+                  value = shipment?.reference || "";
+                  break;
+                case "reference2":
+                  value = shipment?.reference2 || "";
+                  break;
+                case "reference3":
+                  value = shipment?.reference3 || "";
+                  break;
+                case "dimentions":
+                  value = shipment?.dimentions || "";
+                  break;
+                case "weight":
+                  value = shipment?.weight || "";
+                  break;
+                case "labels":
+                  value = shipment ? "Label" : ""; // Placeholder
+                  break;
+                case "downloaded":
+                  value = shipment?.labels ? (
+                    <button
+                      onClick={() =>
+                        handleDownloadClick(index, shipment.labels, shipment.trackingNumber)
+                      }
+                      disabled={isDownloading}
+                    >
+                      {isDownloading ? 'Downloading...' : 'Download'}
+                    </button>
+                  ) : (
+                    ""
+                  );
+                  break;
+                default:
+                  value = " ";
+                  break;
+              }
+
+              return <td key={colIndex}>{value}</td>;
+            })}
+          </tr>
+        );
+      })}
   </tbody>
 </table>
 
-
       </div>
-      {!loading && (
+  
         <CustomPagination
           currentPage={currentPage}
           itemsPerPage={itemsPerPage}
@@ -856,7 +837,7 @@ console.log("resutl" ,result);
           handleItemsPerPageChange={handleItemsPerPageChange}
           totalPages={totalPages}
         />
-      )}
+      
     </div>
   );
 };

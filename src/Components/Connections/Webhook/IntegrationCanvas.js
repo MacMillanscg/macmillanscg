@@ -92,7 +92,7 @@ export const IntegrationCanvas = () => {
   const [clientId, setClientId] = useState(null);
   const [integrationId, setIntegrationId] = useState(null);
   const [shopifyOrderIds, setShopifyOrderIds] = useState([]);
-  const [fullfillmentId, setFullfillmentId] = useState(["223417687559"]);
+  const [fullfillmentId, setFullfillmentId] = useState([]);
   const [selectedStep, setSelectedStep] = useState("Rule 1");
   const [selectedStepId, setSelectedStepId] = useState(null);
   const [newRules, setNewRules] = useState(false);
@@ -132,25 +132,35 @@ export const IntegrationCanvas = () => {
         `${apiURL}/connections/${id}/api/orders`
       );
       const orders = response.data.orders;
-
-      const ordersWithPhone = orders.map((order) => {
+      console.log("all orders" , orders)
+  
+      // Filter orders where fulfillment_status is not "fulfilled"
+      const unfulfilledOrders = orders.filter((order) => order.fulfillment_status !== "fulfilled");
+  
+      // Map through the unfulfilled orders to add customer phone number
+      const ordersWithPhone = unfulfilledOrders.map((order) => {
         const phoneNumber = order.customer?.phone || "No phone provided";
-        console.log("phonenumber", phoneNumber);
+        console.log("Phone number", phoneNumber);
         return { ...order, customerPhone: phoneNumber };
       });
-
+  
+      console.log("Orders with phone number:", ordersWithPhone);
+  
+      // Set the filtered orders in state
       setOrders(ordersWithPhone);
-
       localStorage.setItem("shopifyInitialized", JSON.stringify(true));
       localStorage.setItem("shopify", JSON.stringify(true));
+  
       closeShopifyPopup();
-
-      // setInitialized(true);
+  
+      // Trigger fetch update if needed
       setFetchTrigger(!fetchTrigger);
+  
     } catch (error) {
       console.error("Error fetching orders:", error);
     }
   };
+  
 
   const fetchShopifyIds = async () => {
     try {
@@ -172,11 +182,11 @@ export const IntegrationCanvas = () => {
   // console.log("shopifyOrderIds", shopifyOrderIds[0]);
 
   // Call fetchShopifyIds when orders are updated
-  useEffect(() => {
-    if (orders && orders.length > 0) {
-      fetchShopifyIds();
-    }
-  }, [orders]);
+  // useEffect(() => {
+  //   if (orders && orders.length > 0) {
+  //     fetchShopifyIds();
+  //   }
+  // }, [orders]);
 
   console.log("orders", orders);
 
@@ -191,7 +201,7 @@ export const IntegrationCanvas = () => {
         `${apiURL}/connections/${id}/get-fulfillment`
       );
       if (response) {
-        // setFullfillmentId(response.data.fulfillmentOrderIds);
+        setFullfillmentId(response.data.fulfillmentOrderIds);
         console.log("fulfillmentOrderIds", response.data.fulfillmentOrderIds);
       }
     } catch (error) {
@@ -206,7 +216,7 @@ export const IntegrationCanvas = () => {
   }, [orders]);
 
   const sigleFilfullId = fullfillmentId[0];
-  console.log("sdfasdfs", sigleFilfullId);
+  console.log("sigleFilfullId", sigleFilfullId);
 
   const sendFulfillmentsWithDelay = async (fulfillmentIds, delay = 2000) => {
     for (let i = 0; i < fulfillmentIds.length; i++) {
@@ -248,11 +258,11 @@ export const IntegrationCanvas = () => {
     }
   };
 
-  useEffect(() => {
-    if (fullfillmentId.length > 0) {
-      sendFulfillmentsWithDelay(fullfillmentId, 2000); // Delay of 2000ms (2 seconds) between requests
-    }
-  }, [fullfillmentId]); // Runs when fullfillmentId array is updated
+  // useEffect(() => {
+  //   if (fullfillmentId.length > 0) {
+  //     sendFulfillmentsWithDelay(fullfillmentId, 2000); // Delay of 2000ms (2 seconds) between requests
+  //   }
+  // }, [fullfillmentId]); // Runs when fullfillmentId array is updated
 
   useEffect(() => {
     // if (initialized) {
@@ -455,12 +465,17 @@ export const IntegrationCanvas = () => {
     setXmlContents(xmlContent);
     setIsXmlPopup(true);
     closeConverterPopup();
+    console.log("tesing xml popup")
   };
   // console.log("xmlContents:", xmlContents);
 
   const closeXmlPopup = () => {
     setIsXmlPopup(false);
   };
+  const testing = () =>{
+    console.log("tesgintksadfja;ldfjaljsdljlfa")  
+  }
+  
 
   const closeFullfilmentPopup = () => {
     setIsFullfilmentPopup(false);
@@ -726,6 +741,8 @@ export const IntegrationCanvas = () => {
                         <FontAwesomeIcon
                           icon={faEdit}
                           className={styles.editDeleteIcon}
+                      
+                        
                         />
                       </div>
                     </div>
@@ -763,6 +780,7 @@ export const IntegrationCanvas = () => {
                       <FontAwesomeIcon
                         icon={faEdit}
                         className={styles.editDeleteIcon}
+                        onClick={() => setIsXmlPopup(true)}
                       />
                     </div>
                   </div>
@@ -864,7 +882,7 @@ export const IntegrationCanvas = () => {
                   setIsConverterPopup(true);
                 }}
               >
-                <XmlPopup orders={orders} />
+                <XmlPopup orders={orders} id ={id} onClose={closeXmlPopup}/>
               </StepPopup>
             )}
             {isIntegratioPopup && (
@@ -1015,6 +1033,7 @@ export const IntegrationCanvas = () => {
             selectedIntegration={selectedIntegration}
             orders={orders}
             shopifyDetails={shopifyDetails}
+            id ={id}
           />
         </div>
       </div>
